@@ -13,9 +13,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Ansible
-        uses: ansible/ansible-galaxy-action@v2
-
       - name: Create Vault Password File
         run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_secrets &&
           chmod 600 .vault_secrets
