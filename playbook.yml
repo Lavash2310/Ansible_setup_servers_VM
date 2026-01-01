@@ -1,0 +1,122 @@
+- name: Website and Database Server Setup
+  hosts: servers
+  become: true
+  vars_files:
+    - vars/secrets.yml
+  vars:
+    db_name: employee_db
+    db_user: db_user
+    db_user_password: "{{ vault_db_user_password }}"
+    app_dir: /opt/flask_app
+    venv_dir: "{{ app_dir }}/venv"
+    db_sql_file: employees.sql
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Installed all required packages
+      apt:
+        name:
+          - python3
+          - python3-setuptools
+          - python3-pip
+          - python3-venv
+          - python3-mysqldb
+        state: present
+
+    - name: Installed MySQL database server
+      apt:
+        name:
+          - mysql-server
+          - mysql-client
+        state: present
+
+    - name: Create Application Database
+      mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Start MySQL database
+      service:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Create a Database User and Grant Privileges
+      mysql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_user_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        host: "%"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+      no_log: true
+
+    - name: Prepare application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: "0755"
+
+    - name: Copy SQL script
+      copy:
+        src: "{{ db_sql_file }}"
+        dest: "{{ app_dir }}/{{ db_sql_file }}"
+
+    - name: Import initial database schema
+      mysql_db:
+        name: "{{ db_name }}"
+        state: import
+        target: "{{ app_dir }}/{{ db_sql_file }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Create virtual environment
+      command: python3 -m venv "{{ venv_dir }}"
+      args:
+        creates: "{{ venv_dir }}/bin/activate"
+
+    - name: Install Flask in virtualenv
+      pip:
+        virtualenv: "{{ venv_dir }}"
+        name:
+          - flask
+          - flask-mysqldb
+        state: present
+
+    - name: Copy source code
+      copy:
+        src: app.py
+        dest: "{{ app_dir }}/app.py"
+        owner: www-data
+        group: www-data
+        mode: "0644"
+      notify: Restart Flask service
+
+    - name: Configure Systemd Service
+      template:
+        src: templates/flaskapp.service.j2
+        dest: /etc/systemd/system/flaskapp.service
+      notify:
+        - Reload systemd
+        - Restart Flask service
+
+    - name: Ensure Flask service is started and enabled
+      systemd:
+        name: flaskapp
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Restart Flask service
+      systemd:
+        name: flaskapp
+        state: restarted
