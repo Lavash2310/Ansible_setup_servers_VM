@@ -1,21 +1,24 @@
+DROP TABLE IF EXISTS employees;
 CREATE TABLE
 IF NOT EXISTS employees
 (
     id INT
     AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR
+    full_name VARCHAR
 (100) NOT NULL,
     position VARCHAR
 (100) NOT NULL,
     salary DECIMAL
 (10,2) NOT NULL,
-    hire_date DATE NOT NULL
+    hire_date DATE NOT NULL,
+    UNIQUE KEY
+(full_name)
 );
 
 TRUNCATE TABLE employees;
 
 INSERT INTO employees
-    (name, position, salary, hire_date)
+    (full_name, position, salary, hire_date)
 VALUES
     ('Alice Johnson', 'Software Engineer', 75000.00, '2022-03-15'),
     ('Bob Smith', 'Data Analyst', 65000.00, '2021-07-22'),
